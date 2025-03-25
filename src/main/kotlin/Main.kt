@@ -100,8 +100,8 @@ fun createRandomMap(ships: MutableList<ShipShapes>, seed: Int = Random.nextInt()
         // try putting the ship on random location
         while (true) {
             val shape = ShapeDirected(shape = ship, horizontal = rng.nextBoolean())
-            val x = rng.nextInt(MAP_SIZE - shape.height)
-            val y = rng.nextInt(MAP_SIZE - shape.width)
+            val x = rng.nextInt(MAP_SIZE - shape.height + 1)
+            val y = rng.nextInt(MAP_SIZE - shape.width + 1)
 
             // can I put it there?
             if (canShipBePut(legend, x, y, shape.points)) {
