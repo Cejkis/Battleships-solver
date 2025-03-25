@@ -1,5 +1,6 @@
 import java.lang.Exception
 import kotlin.math.pow
+import kotlin.random.Random
 import kotlin.system.exitProcess
 
 
@@ -7,6 +8,7 @@ const val UNKNOWN = '*' // can be any of other types
 const val SUNKEN_SHIP = 'x'
 const val SHIP = 'X' // ship being sunk
 const val WATER = '.'
+const val MAP_SIZE = 12
 
 // Ships are positioned sideways here, but it doesn't really matter, and they are symmetrical and also applied perpendicularly.
 // Except for NINE, they are long lines
@@ -69,57 +71,61 @@ fun printHeat(map: Array<DoubleArray>) {
     println()
 }
 
-// can be used to add map diversity
-fun flipDiagonally(inputArray: Array<CharArray>): Array<CharArray> {
-    val numRows = inputArray.size
-    val numCols = inputArray[0].size
-
-    val flippedArray = Array(numCols) { CharArray(12) }
-
-    for (col in 0 until numCols) {
-        val stringBuilder = CharArray(12)
-        for (row in 0 until numRows) {
-            stringBuilder[row] = (inputArray[row][col])
+fun canShipBePut(legend: Array<CharArray>, x: Int, y: Int, structure: List<Pair<Int, Int>>): Boolean {
+    for (it in structure) {
+        (-1..1).forEach { row ->
+            (-1..1).forEach { column ->
+                val currentValue = try {
+                    legend[x + it.first + row][y + it.second + column]
+                } catch (_: Exception) {
+                    // ugly but easy way to ignore getting out of bounds
+                    null
+                }
+                if (currentValue == SHIP) {
+                    return false
+                }
+            }
         }
-        flippedArray[col] = stringBuilder
     }
-
-    return flippedArray
+    return true
 }
 
-fun createMap(): Array<CharArray> {
-    val content = """
-        .......X....
-        ..XXX..X....
-        .......X....
-        ............
-        .........X..
-        ...X.....X..
-        X.XXX....X..
-        X..X.....X..
-        X.XXX.......
-        X..X........
-        X..........X
-        ...........X
-    """.trimIndent()
-
-    val rows = content.split("\n")
-    val legend = Array(rows.size) { row ->
-        rows[row].toCharArray()
+fun createRandomMap(ships: MutableList<ShipShapes>, seed: Int = Random.nextInt()): Array<CharArray> {
+    val legend = Array(MAP_SIZE) { row ->
+        CharArray(MAP_SIZE) { WATER }
     }
+    val rng = Random(seed)
+
+    ships.forEach { ship ->
+        // try putting the ship on random location
+        while (true) {
+            val shape = ShapeDirected(shape = ship, horizontal = rng.nextBoolean())
+            val x = rng.nextInt(MAP_SIZE - shape.height)
+            val y = rng.nextInt(MAP_SIZE - shape.width)
+
+            // can I put it there?
+            if (canShipBePut(legend, x, y, shape.points)) {
+                shape.points.forEach {
+                    legend[x + it.first][y + it.second] = SHIP
+                }
+                break
+            }
+        }
+    }
+
     printMap(legend)
-    return legend // flipDiagonally(legend)
+    return legend
 }
 
 class Game {
     var round = 1
 
-    val gameLegend = createMap()
-
     val missingShips = mutableListOf(ShipShapes.NINE, ShipShapes.FIVE, ShipShapes.FOUR, ShipShapes.THREE, ShipShapes.THREE, ShipShapes.TWO)
 
+    val gameLegend = createRandomMap(missingShips)
+
     // current game progress - what player sees
-    val myMap = Array(12) { CharArray(12) { UNKNOWN } }
+    val myMap = Array(MAP_SIZE) { CharArray(MAP_SIZE) { UNKNOWN } }
 
     // coordinates of a ship we are currently sinking. Empty if we are looking for another ship.
     val hitShipPlaces = mutableSetOf<Pair<Int, Int>>()
@@ -128,7 +134,7 @@ class Game {
     var heatMap = resetHeatMap()
 
     fun resetHeatMap(): Array<DoubleArray> {
-        return Array(12) { DoubleArray(12) { 0.0 } }
+        return Array(MAP_SIZE) { DoubleArray(MAP_SIZE) { 0.0 } }
     }
 
     fun computeHeatMap(missingShapes: List<ShapeDirected>) {
@@ -136,8 +142,8 @@ class Game {
 
         // Try to apply all remaining ships to all coords
         missingShapes.forEach { shape ->
-            (0..12 - shape.height).forEach { row ->
-                (0..12 - shape.width).forEach { column ->
+            (0..MAP_SIZE - shape.height).forEach { row ->
+                (0..MAP_SIZE - shape.width).forEach { column ->
                     var possible = true
                     // we are counting how many unsunk ship pieces are we laying over current shape to radically increase heat there.
                     // The idea is to continue with already sinking ship instead of searching for new places (algorithm is designed to go one by one)
@@ -145,8 +151,7 @@ class Game {
 
                     shape.points.forEach { // can all points of a ship be applied there?
                         when (myMap[row + it.first][column + it.second]) {
-                            WATER -> possible = false
-                            SUNKEN_SHIP -> possible = false
+                            WATER, SUNKEN_SHIP -> possible = false
                             SHIP -> ships++
                         }
                     }
@@ -167,8 +172,8 @@ class Game {
         val potentialShips = mutableSetOf<Triple<Int, Int, ShapeDirected>>()
 
         shapes.forEach { shape ->
-            (0..12 - shape.height).forEach { row ->
-                (0..12 - shape.width).forEach { column ->
+            (0..MAP_SIZE - shape.height).forEach { row ->
+                (0..MAP_SIZE - shape.width).forEach { column ->
                     var match = true
                     val shapeOnMap = shape.points.map { Pair(row + it.first, column + it.second) }
 
